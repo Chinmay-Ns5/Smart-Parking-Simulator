@@ -1,18 +1,63 @@
 import random
+import math
 from config import *
 from car import Car, MOVING, PARKED, DEPARTING, EXITING, EXITED
 
 
 class Slot:
+    SENSOR_RANGE = 45
+
     def __init__(self, index, col, row, x, y):
-        self.index    = index
-        self.col      = col
-        self.row      = row
+        self.index     = index
+        self.col       = col
+        self.row       = row
         self.x, self.y = x, y
-        self.cx       = x + SLOT_DEPTH // 2
-        self.cy       = y + SLOT_W     // 2
-        self.occupied = False
-        self.car_ref  = None
+        self.cx        = x + SLOT_DEPTH // 2
+        self.cy        = y + SLOT_W     // 2
+        self.reserved  = False
+        self.occupied  = False
+        self.car_ref   = None
+        self.ir_sensor_triggered = False
+        self._sensor_debounce = -0.15
+        self._sensor_noise = 0.0
+        self.car_nearby = False
+
+    def update_sensor(self, dt):
+        if self.car_ref is None:
+            self.ir_sensor_triggered = False
+            self._sensor_debounce = -0.15
+            self._sensor_noise = 0.0
+            self.car_nearby = False
+            return
+
+        car = self.car_ref
+        dist = math.hypot(car.x - self.cx, car.y - self.cy)
+        self.car_nearby = dist < self.SENSOR_RANGE * 2
+        
+        if car.state == PARKED:
+            in_range = dist < self.SENSOR_RANGE
+        elif car.state == DEPARTING:
+            in_range = dist < self.SENSOR_RANGE * 1.5
+        elif car.state == EXITING:
+            in_range = dist < self.SENSOR_RANGE * 0.8
+        else:
+            # A slot is not occupied while the car is still approaching it.
+            in_range = False
+
+        self._sensor_noise += (random.random() - 0.5) * 0.3
+        self._sensor_noise = max(-0.2, min(0.2, self._sensor_noise))
+        raw_signal = in_range + self._sensor_noise
+        threshold = 0.5
+
+        if raw_signal >= threshold:
+            self._sensor_debounce = min(0.15, self._sensor_debounce + dt)
+        else:
+            self._sensor_debounce = max(-0.15, self._sensor_debounce - dt)
+
+        if self._sensor_debounce >= 0.15:
+            self.ir_sensor_triggered = True
+        elif self._sensor_debounce <= -0.15:
+            self.ir_sensor_triggered = False
 
 
 class Barrier:
@@ -83,7 +128,7 @@ class ParkingLot:
         Right-aisle slots carry a horizontal-crossing penalty.
         prefer_col: if set, only consider slots in cols < 2 ("left") or cols >= 2 ("right").
         """
-        free = [s for s in self.slots if not s.occupied]
+        free = [s for s in self.slots if not s.occupied and not s.reserved]
         if prefer_col is not None:
             free = [s for s in free if (s.col < 2) == (prefer_col == "left")]
         if not free:
@@ -156,7 +201,7 @@ class ParkingLot:
         if slot is None:
             return  # all aisles busy or lot full
 
-        slot.occupied = True
+        slot.reserved = True
         car = Car(slot.index)
         car.park_duration = random.uniform(PARK_MIN, PARK_MAX)
         car.set_entry_path(slot)
@@ -177,9 +222,18 @@ class ParkingLot:
             prev_state = car.state
             car.update(dt)
 
+            if prev_state == MOVING and car.state == PARKED:
+                slot = self.slots[car.slot_index]
+                slot.reserved = False
+                slot.occupied = True
+
             # Handle DEPARTING → EXITING when conditions allow
             if car.state == DEPARTING:
                 self._try_start_exit(car)
+
+        # Update IR sensors for all slots
+        for slot in self.slots:
+            slot.update_sensor(dt)
 
         # Remove fully exited cars
         exited = [c for c in self.cars if c.state == EXITED]
@@ -201,6 +255,7 @@ class ParkingLot:
 
         slot = self.slots[car.slot_index]
         slot.occupied = False
+        slot.reserved = False
         slot.car_ref  = None
         car.set_exit_path(slot)
         car.state = EXITING
@@ -208,7 +263,19 @@ class ParkingLot:
 
     @property
     def free_count(self):
-        return sum(1 for s in self.slots if not s.occupied)
+        return self.available_count
+
+    @property
+    def available_count(self):
+        return sum(1 for s in self.slots if not s.occupied and not s.reserved)
+
+    @property
+    def occupied_count(self):
+        return sum(1 for s in self.slots if s.occupied)
+
+    @property
+    def reserved_count(self):
+        return sum(1 for s in self.slots if s.reserved and not s.occupied)
 
     @property
     def total_slots(self):

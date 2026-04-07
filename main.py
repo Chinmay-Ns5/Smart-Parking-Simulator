@@ -129,7 +129,12 @@ def draw_background(surf):
 
 def draw_slots(surf, lot, font):
     for slot in lot.slots:
-        col = SLOT_OCC if slot.occupied else SLOT_FREE
+        if slot.occupied:
+            col = SLOT_OCC
+        elif slot.car_nearby:
+            col = ORANGE
+        else:
+            col = SLOT_FREE
         r   = pygame.Rect(slot.x, slot.y, SLOT_DEPTH, SLOT_W)
         pygame.draw.rect(surf, col, r, border_radius=3)
         pygame.draw.rect(surf, CURB_COL, r, 1, border_radius=3)
@@ -140,7 +145,7 @@ def draw_slots(surf, lot, font):
                         slot.cy - lbl.get_height() // 2))
 
         # IR sensor LED (corner closest to aisle)
-        led_col = LED_ON_R if slot.occupied else LED_ON_G
+        led_col = LED_ON_R if slot.ir_sensor_triggered else LED_ON_G
         # Aisle-facing edge: right for col 0 & 2, left for col 1 & 3
         if slot.col in (0, 2):
             lx = slot.x + SLOT_DEPTH - 8
@@ -212,10 +217,18 @@ def draw_panel(surf, lot, font_s, font_m, speed_mult=1.0):
         ps.blit(rl, (6, y + 1))
         for c in range(N_COLS):
             slot = lot.slots[c * N_ROWS + r]   # col-major indexing
-            bc   = LED_ON_R if slot.occupied else LED_ON_G
+            if slot.occupied:
+                bc = LED_ON_R
+                bit_text = "1"
+            elif slot.reserved:
+                bc = ORANGE
+                bit_text = "R"
+            else:
+                bc = LED_ON_G
+                bit_text = "0"
             bx   = 6 + label_w + c * cell_w
             pygame.draw.rect(ps, bc, (bx, y, cell_w - 4, cell_h), border_radius=2)
-            bit = font_s.render(str(int(slot.occupied)), True, BLACK)
+            bit = font_s.render(bit_text, True, BLACK)
             ps.blit(bit, (bx + (cell_w - 4) // 2 - bit.get_width() // 2, y + 1))
         y += row_step
 
@@ -233,8 +246,9 @@ def draw_panel(surf, lot, font_s, font_m, speed_mult=1.0):
     # ── Stats ──────────────────────────────────────────────────────────────────
     stats = [
         ("TOTAL SLOTS", str(lot.total_slots)),
-        ("AVAILABLE",   str(lot.free_count)),
-        ("OCCUPIED",    str(lot.total_slots - lot.free_count)),
+        ("AVAILABLE",   str(lot.available_count)),
+        ("RESERVED",    str(lot.reserved_count)),
+        ("OCCUPIED",    str(lot.occupied_count)),
         ("CARS IN",     str(lot.cars_in)),
         ("CARS OUT",    str(lot.cars_out)),
     ]
@@ -273,7 +287,7 @@ def draw_panel(surf, lot, font_s, font_m, speed_mult=1.0):
 
 def draw_hud(surf, lot, font_m):
     surf.blit(font_m.render(TITLE, True, WHITE), (LOT_X, 18))
-    free = lot.free_count
+    free = lot.available_count
     tot  = lot.total_slots
     col  = GREEN if free > tot // 4 else (YELLOW if free > 0 else RED)
     al   = font_m.render(f"Available: {free} / {tot}", True, col)
