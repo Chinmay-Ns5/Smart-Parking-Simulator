@@ -2,35 +2,6 @@
 
 A real-time, Pygame-based smart parking lot simulation that models the full lifecycle of vehicles entering, being assigned slots, parking, and exiting — with animated boom barriers, IR-style slot sensors, aisle traffic-control logic, and a live controller panel dashboard.
 
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Features](#features)
-3. [Requirements & Installation](#requirements--installation)
-4. [Running the Simulator](#running-the-simulator)
-5. [Controls](#controls)
-6. [Project Structure](#project-structure)
-7. [Architecture & Module Breakdown](#architecture--module-breakdown)
-   - [config.py — Constants & Geometry](#configpy--constants--geometry)
-   - [car.py — Car State Machine & Rendering](#carpy--car-state-machine--rendering)
-   - [lot.py — Parking Lot Model & Control Logic](#lotpy--parking-lot-model--control-logic)
-   - [main.py — Application Loop & Rendering](#mainpy--application-loop--rendering)
-8. [Parking Lot Layout](#parking-lot-layout)
-9. [Slot Allocation Algorithm](#slot-allocation-algorithm)
-10. [Car State Machine (Full Detail)](#car-state-machine-full-detail)
-11. [Traffic Safety System](#traffic-safety-system)
-12. [Sensor Simulation](#sensor-simulation)
-13. [Barrier / Gate System](#barrier--gate-system)
-14. [Controller Panel & HUD](#controller-panel--hud)
-15. [Full Simulation Flow (Step-by-Step)](#full-simulation-flow-step-by-step)
-16. [Key Constants Reference](#key-constants-reference)
-17. [Possible Extensions](#possible-extensions)
-18. [License](#license)
-
----
-
 ## Overview
 
 The simulator models a **32-slot parking lot** divided into two aisles (left and right), each served by a dedicated entry lane and exit lane. A vertical external road on the left side of the screen acts as the main arterial — cars spawn at the bottom, drive up, pass through the entry gate into the lot's internal horizontal road, travel up an aisle, and park.
